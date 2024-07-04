@@ -9,7 +9,7 @@ import time
 import pickle
 import json
 
-from xml.dom import minidom
+import xml.etree.ElementTree as ET
 
 
 
@@ -107,6 +107,13 @@ class IOTC_IPC:
         def change_server_xml(self, new_xml):
             self.server_obj.xml_content = new_xml
             self.server_obj.use_custom_xml = True
+
+            root = ET.fromstring(self.server_obj.xml_content)
+            for iface in root:
+                for option in iface:
+                    if (option.tag == "signal"):
+                        print("Binding signal named: " + option.attrib["name"])
+                        self.bind_signal(option.attrib["name"])
 
         def signal_emit(self, signal: str, *arg):
             getattr(self.server_obj, signal)(*arg)
