@@ -9,6 +9,10 @@ import time
 import pickle
 import json
 
+import os.path
+import pwd
+import subprocess
+
 import xml.etree.ElementTree as ET
 
 
@@ -190,10 +194,12 @@ class IOTC_IPC:
 
 
         # better write your own specific handler
-        def default_parser(self, *params):
+        # I think I've overcomplicated this
+        def default_parser(self, return_json: bool, *params):
 
             self.type_counters_offsets = self.type_counters.copy()
 
+            #figuring out which exactly signal we've received (assuming this function is a callback for multiple signals)
             req_signal = None
             for signal in self.registered_signals:
                 signal_attributes_mathed_received_params = True
@@ -238,10 +244,10 @@ class IOTC_IPC:
                 self.type_counters[x] = 0
             types = getattr(self.server_obj, req_signal).__signal__._args
 
-            print(len(types))
+            #print(len(types))
 
-            print(self.type_counters)
-            print((str)(type(types)))
+            #print(self.type_counters)
+            #print((str)(type(types)))
             output = {}
             for i in range (len(params)):
                 print("elem " + (str)(i) + " data [" + (str)(params[i]) + "] type: " + (str)(type(params[i])))
@@ -258,10 +264,12 @@ class IOTC_IPC:
                         output[types[i] + (str)(self.type_counters[types[i]])] = params[i]
                         self.type_counters[types[i]]+=1
 
-            print(self.type_counters)
+            #print(self.type_counters)
             for x in self.type_counters:
                 self.type_counters[x] = 0
-            return json.dumps(output, indent = 4)
+            if (return_json):
+                return json.dumps(output, indent = 4)
+            return output
 
         def read_object(self):
             if self.con is None:
