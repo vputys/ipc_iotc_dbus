@@ -1,17 +1,14 @@
-from pydbus import SystemBus
 from gi.repository import GLib
+
+from pydbus import SystemBus
 from pydbus import SessionBus
 from pydbus.generic import signal
 from pydbus.generic import bound_signal
+
 import types
-import threading
 import time
 import pickle
 import json
-
-import os.path
-import pwd
-import subprocess
 
 import xml.etree.ElementTree as ET
 
@@ -49,8 +46,11 @@ class IOTC_IPC:
             """returns the string 'Hello, World!'"""
             return "Hello, World!"
 
-        interface = None
         use_custom_xml = False
+
+        # not used
+        interface = None
+
         def __init__(self, iface: str):
             interface = iface
 
@@ -62,12 +62,16 @@ class IOTC_IPC:
         loop = None
 
         _dbus_obj_name = None
+
+        # not used
         _dbus_iface = None
 
         def __init__(self, dbus_obj_name: str, dbus_iface: str, *, is_standalone: bool = False, is_system: bool = False):
 
             if (is_standalone):
                 self.loop = GLib.MainLoop()
+            # TODO: this feels wrong - instantiating another object and then rewriting it's insides later with
+            # change_server_xml() function. May be better to provide object separately? Or have an option to do that?
             self.server_obj = IOTC_IPC.DBUSServer(dbus_iface)
 
             if is_system:
@@ -84,28 +88,14 @@ class IOTC_IPC:
         # should be run only after everyting is set up
         def start_server(self, *, standalone = False):
             self.bus.publish(self._dbus_obj_name, self.server_obj, use_xml_var = self.server_obj.use_custom_xml)
-            # TODO: loop.run() here?
-            # objdetect_tfl.py uses gtk.main loop - maybe glib loop.run not needed in that situation?
             if (standalone):
-                self.loop.run()
+                if (self.loop is not None):
+                    self.loop.run()
+                else:
+                    print("Failed: this server is not configured to run it's own event loop!")
 
         def bind_signal(self, new_signal: str):
-            # TODO: unfisnished?
-
-            # TODO: DID THIS WORK? this seems to be a weird hack, double check later
             setattr(self.server_obj, new_signal, bound_signal(signal(), self.server_obj))
-
-            # setattr(self.server_obj, new_signal, signal())
-
-            # newattr = getattr(self.server_obj, new_signal)
-            # self.server_obj.__dict__[new_signal] = types.MethodType( signal, getattr(self.server_obj, new_signal))
-
-            # another = getattr(self.server_obj, new_signal)
-            # print(self.server_obj.__dict__)
-            # print("_________________________________")
-            # print(getattr(self.server_obj, new_signal))
-            # print(getattr(self.server_obj, new_signal).__dict__)
-            # help(print(getattr(self.server_obj, new_signal)))
 
         # TODO: probably need to parse XML here and create signals, args etc
         def change_server_xml(self, new_xml):
@@ -122,7 +112,7 @@ class IOTC_IPC:
         def signal_emit(self, signal: str, *arg):
             getattr(self.server_obj, signal)(*arg)
 
-        # TODO: re-visit as it doesn't work
+        # TODO: re-visit as it doesn't seem to work
         def __del__(self):
             if self.loop is not None:
                 self.loop.quit()
@@ -186,20 +176,26 @@ class IOTC_IPC:
             return True
 
         def run(self):
-            self.loop.run()
+            if (self.loop is not None):
+                self.loop.run()
+            else:
+                print("Failed: Client is not configured to run even loop!")
 
         def __del__(self):
-
-            self.loop.quit()
+            if (self.loop is not None):
+                self.loop.quit()
 
 
         # better write your own specific handler
         # I think I've overcomplicated this
+        # what this function intends to do - to parse received data and return a dictionary or a json string
+        # that uses the data type with an index number as a key in a resulting dict/json
         def default_parser(self, return_json: bool, *params):
 
             self.type_counters_offsets = self.type_counters.copy()
 
-            #figuring out which exactly signal we've received (assuming this function is a callback for multiple signals)
+            # figuring out which exactly signal we've received judging by received data types
+            # (assuming this function is a callback for multiple signals)
             req_signal = None
             for signal in self.registered_signals:
                 signal_attributes_mathed_received_params = True
@@ -225,7 +221,7 @@ class IOTC_IPC:
                     print("not list")
                     # TODO?
                 if (signal_attributes_mathed_received_params):
-                    print("that's our signal: " + signal)
+                    #print("that's our signal: " + signal)
                     req_signal = signal
                     break
                 else:
@@ -250,10 +246,10 @@ class IOTC_IPC:
             #print((str)(type(types)))
             output = {}
             for i in range (len(params)):
-                print("elem " + (str)(i) + " data [" + (str)(params[i]) + "] type: " + (str)(type(params[i])))
+                #print("elem " + (str)(i) + " data [" + (str)(params[i]) + "] type: " + (str)(type(params[i])))
 
                 if (type(params[i]) == self.dbus_types_map[types[i]]):
-                    print("Accepted type " + (str)(self.dbus_types_map[types[i]]))
+                    #print("Accepted type " + (str)(self.dbus_types_map[types[i]]))
                     if (types[i] == "au"):
                         print(bytes(params[i]))
                         barr = bytes(params[i])
@@ -270,20 +266,3 @@ class IOTC_IPC:
             if (return_json):
                 return json.dumps(output, indent = 4)
             return output
-
-        def read_object(self):
-            if self.con is None:
-                self.__init__(self)
-
-            data = None
-            data = self.con.recv()
-            data = pickle.loads(data)
-
-            return data
-
-
-if __name__ == "__main__":
-    # r = IOTC_IPC.Receiver
-    x = IOTC_IPC.Sender()
-    while 1:
-        x.send_key_value("a", "b")
